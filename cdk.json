@@ -1,0 +1,3 @@
+{
+  "app": "tsx infra/bin/koto.ts"
+}
