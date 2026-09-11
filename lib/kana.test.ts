@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRomajiAnswer, kanaGroups, normalizeRomaji, seededShuffle } from "@/lib/kana";
+import { isRomajiAnswer, kanaGroups, normalizeRomaji, recallDisambiguation, seededShuffle } from "@/lib/kana";
 
 describe("rōmaji normalization", () => {
   it("normalizes case, whitespace, punctuation, and macrons", () => {
@@ -21,9 +21,20 @@ describe("rōmaji normalization", () => {
     expect(hiragana).toHaveLength(katakana.length);
   });
 
+  it("identifies a group when a recall reading has more than one valid spelling", () => {
+    const dji = kanaGroups.find((group) => group.id === "h-d")!.items.find((item) => item.romaji === "ji")!;
+    const ordinaryKa = kanaGroups.find((group) => group.id === "h-k")!.items[0];
+    expect(recallDisambiguation(dji)).toBe("D row spelling");
+    expect(recallDisambiguation(ordinaryKa)).toBeUndefined();
+  });
+
   it("reshuffles kana choices between attempts", () => {
-    const choices = kanaGroups.slice(0, 3).flatMap((group) => group.items.map((item) => item.kana));
-    expect(seededShuffle(choices, "attempt-1")).toEqual(seededShuffle(choices, "attempt-1"));
-    expect(seededShuffle(choices, "attempt-1")).not.toEqual(seededShuffle(choices, "attempt-2"));
+    const group = kanaGroups.find((candidate) => candidate.id === "h-vowels")!;
+    const item = group.items[0];
+    const choices = group.items.map((candidate) => candidate.kana);
+    const first = seededShuffle(choices, `${item.id}-0-learning-grid`);
+    const second = seededShuffle(choices, `${item.id}-1-learning-grid`);
+    expect(first).toEqual(seededShuffle(choices, `${item.id}-0-learning-grid`));
+    expect(first).not.toEqual(second);
   });
 });

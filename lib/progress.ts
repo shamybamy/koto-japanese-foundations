@@ -1,5 +1,5 @@
 import { Card, Rating, State, createEmptyCard, fsrs, generatorParameters } from "ts-fsrs";
-import { Direction, KanaGroup, KanaScript, kanaGroups } from "@/lib/kana";
+import { Direction, KanaGroup, KanaScript, kanaGroups, seededShuffle } from "@/lib/kana";
 
 export type StoredCard = Omit<Card, "due" | "last_review"> & {
   due: string;
@@ -20,12 +20,13 @@ export type ProgressState = {
   recognitionGroups: string[];
   recallStartedGroups: string[];
   proficientGroups: string[];
+  groupCompletedAt: Record<string, string>;
   reviews: ReviewEntry[];
   dailyNew: { date: string; count: number };
 };
 
 export const emptyProgress: ProgressState = {
-  lessons: {}, cards: {}, startedGroups: [], recognitionGroups: [], recallStartedGroups: [], proficientGroups: [], reviews: [], dailyNew: { date: "", count: 0 },
+  lessons: {}, cards: {}, startedGroups: [], recognitionGroups: [], recallStartedGroups: [], proficientGroups: [], groupCompletedAt: {}, reviews: [], dailyNew: { date: "", count: 0 },
 };
 
 const scheduler = fsrs(generatorParameters({ request_retention: 0.9 }));
@@ -67,14 +68,16 @@ export function startKanaGroup(state: ProgressState, group: KanaGroup): Progress
 
 export function startKanaRecall(state: ProgressState, group: KanaGroup): ProgressState {
   if (!groupDirectionIsProficient(state, group, "recognition")) return state;
-  if ((state.recallStartedGroups ?? []).includes(group.id)) return state;
   const cards = { ...state.cards };
   const now = new Date();
   for (const item of group.items) {
     const key = cardKey(item.id, "recall");
     if (!cards[key]) cards[key] = serializeCard(createEmptyCard(now), item.id, "recall");
   }
-  return { ...state, cards, recallStartedGroups: [...(state.recallStartedGroups ?? []), group.id] };
+  const recallStartedGroups = (state.recallStartedGroups ?? []).includes(group.id)
+    ? (state.recallStartedGroups ?? [])
+    : [...(state.recallStartedGroups ?? []), group.id];
+  return { ...state, cards, recallStartedGroups };
 }
 
 export function reviewKanaCard(
@@ -132,11 +135,15 @@ export function reviewKanaLearning(
   const proficientGroups = state.proficientGroups ?? kanaGroups.filter((candidate) => candidate.items.every((item) =>
     (["recognition", "recall"] as const).every((cardDirection) => ((state.cards[cardKey(item.id, cardDirection)]?.learningStreak ?? state.cards[cardKey(item.id, cardDirection)]?.streak) ?? 0) >= 2),
   )).map((candidate) => candidate.id);
+  const groupCompletedAt = reachedProficiency && group && !state.groupCompletedAt?.[group.id]
+    ? { ...(state.groupCompletedAt ?? {}), [group.id]: now.toISOString() }
+    : (state.groupCompletedAt ?? {});
   return {
     ...state,
     cards,
     recognitionGroups: reachedRecognition && group && !recognitionGroups.includes(group.id) ? [...recognitionGroups, group.id] : recognitionGroups,
     proficientGroups: reachedProficiency && group && !proficientGroups.includes(group.id) ? [...proficientGroups, group.id] : proficientGroups,
+    groupCompletedAt,
   };
 }
 
@@ -183,6 +190,31 @@ export function dueReviewCards(state: ProgressState, now = new Date()) {
 export function buildLearningQueue(state: ProgressState, group: KanaGroup, direction: Direction) {
   const currentIds = new Set(group.items.map((item) => item.id));
   return Object.values(state.cards).filter((card) => card.direction === direction && currentIds.has(card.itemId) && (card.learningStreak ?? card.streak) < 2);
+}
+
+export function buildLearningRounds(state: ProgressState, group: KanaGroup, direction: Direction, seed: string) {
+  const firstPass = group.items.map((item) => cardKey(item.id, direction));
+  const scriptGroups = kanaGroups.filter((candidate) => candidate.script === group.script);
+  const currentIndex = scriptGroups.findIndex((candidate) => candidate.id === group.id);
+  const previous = currentIndex <= 0 ? [] : scriptGroups
+    .slice(0, currentIndex)
+    .flatMap((candidate) => candidate.items)
+    .map((item) => cardKey(item.id, direction))
+    .filter((key) => Boolean(state.cards[key]));
+  const shuffledCurrent = seededShuffle(firstPass, `${seed}-current`);
+  const shuffledPrevious = seededShuffle(previous, `${seed}-previous`);
+  const previousSample = shuffledPrevious.slice(0, 10);
+  const mixedReview = seededShuffle(
+    [...shuffledCurrent, ...previousSample],
+    `${seed}-mixed`,
+  );
+
+  // A shuffle may legitimately reproduce the input order. Rotate a group's
+  // review when there are no earlier cards so the second pass still feels shuffled.
+  if (previousSample.length === 0 && mixedReview.length === firstPass.length && mixedReview.every((key, index) => key === firstPass[index])) {
+    mixedReview.push(mixedReview.shift()!);
+  }
+  return { firstPass, mixedReview };
 }
 
 export function buildReviewQueue(state: ProgressState, script: KanaScript, direction: Direction, now = new Date()) {

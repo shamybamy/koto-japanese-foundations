@@ -8,7 +8,7 @@ import { useProgress } from "@/app/providers";
 const links = [
   ["Learn", "/learn"],
   ["Kana learning", "/kana"],
-  ["Test", "/practice"],
+  ["Practice", "/practice"],
   ["Progress", "/dashboard"],
 ];
 

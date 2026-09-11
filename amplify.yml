@@ -3,11 +3,12 @@ frontend:
   phases:
     preBuild:
       commands:
-        - corepack enable
-        - pnpm install --frozen-lockfile
+        - nvm install 24.19.0
+        - nvm use 24.19.0
+        - npm ci
     build:
       commands:
-        - pnpm build
+        - npm run build
   artifacts:
     baseDirectory: .next
     files:

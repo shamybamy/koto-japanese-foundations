@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Koto — Japanese foundations",
     description: "Hear the beat. Build kana memories that last.",
-    images: [{ url: "/og-koto.png", width: 1792, height: 896, alt: "A Japanese あ study card with pitch and timing marks" }],
+    images: [{ url: "/og-koto.png", width: 1731, height: 909, alt: "A Japanese あ study card with pitch and timing marks" }],
   },
   twitter: { card: "summary_large_image", images: ["/og-koto.png"] },
 };

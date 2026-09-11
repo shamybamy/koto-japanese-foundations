@@ -9,7 +9,7 @@ Koto is a responsive learning app for native English speakers. It combines a fou
 - Full guest access with an explicit session-only progress warning.
 - Cumulative hiragana and katakana learning groups, including voiced forms and yōon.
 - Separate FSRS cards for kana recognition and recall, at 90% desired retention.
-- Typed rōmaji with common aliases, optional browser speech recognition, and shuffled-grid recall.
+- Typed rōmaji with common aliases and shuffled-grid recall.
 - Replayable Japanese browser TTS with no autoplay.
 - Verified-email Cognito registration, login, verification, and password recovery.
 - Authenticated API Gateway/Lambda interfaces and user-partitioned DynamoDB records.
@@ -17,23 +17,29 @@ Koto is a responsive learning app for native English speakers. It combines a fou
 
 ## Run locally
 
-The bundled runtime used during development is Node 24; Node 20 or newer is recommended.
+The repository pins Node 24.19.0 and npm 11.6.2. npm is included with this Node installation, so Corepack and a separate package-manager installation are not required. On this Apple-silicon Mac, run `nvm use` and make sure `node -p "process.arch"` reports `arm64`; if it reports `x64`, install a native arm64 Node build and reinstall dependencies before building.
 
 ```bash
-pnpm install
-pnpm dev
+nvm install
+nvm use
+npm ci
+npm run dev
 ```
 
 Open `http://localhost:3000`. Without AWS environment variables, the app intentionally runs in guest mode and stores progress in `sessionStorage` only.
 
+After the first installation, you can normally start Koto with only `nvm use` and `npm run dev`. Run `npm ci` again after pulling a changed `package-lock.json` or when rebuilding dependencies from scratch.
+
 Useful checks:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm test:run
-pnpm build
+npm run typecheck
+npm run lint
+npm run test:run
+npm run build
 ```
+
+For full handoff instructions, use the [feature testing guide](docs/TESTING_GUIDE.md) and the [AWS account, deployment, and hosting guide](docs/AWS_SETUP_GUIDE.md).
 
 ## AWS architecture
 
@@ -42,32 +48,32 @@ The CDK stack in `infra/` creates:
 - Amazon Cognito User Pool with verified email/password accounts.
 - Amazon API Gateway REST API with a Cognito authorizer.
 - One bundled Node.js Lambda for queue, review, lesson, group, and dashboard operations.
-- Three provisioned DynamoDB tables at 1 read/1 write capacity unit: learner data, review cards, and append-only review logs.
+- Three on-demand DynamoDB tables: learner data, review cards, and append-only review logs.
 - A due-date GSI on review cards.
-- Seven-day CloudWatch log retention.
+- Seven-day CloudWatch Lambda and API access-log retention.
 
 Every persisted key begins with the authenticated Cognito `sub`; the browser never supplies the user identifier. A review card update and its immutable review log are written in one DynamoDB transaction.
 
-Synthesize the stack (the helper automatically uses a system temporary output folder so OneDrive cannot lock CDK&apos;s bundle rename):
+Synthesize the development stack against the same named AWS profile and region you will deploy:
 
 ```bash
-pnpm cdk:synth
+npm exec -- cdk synth KotoLearningStack --profile koto-dev -c stage=dev -c region=ap-southeast-1 -c allowedOrigins=http://localhost:3000
 ```
 
-Deploy after configuring the AWS CLI and bootstrapping the target region:
+Deploy a development stack after configuring the AWS CLI and bootstrapping the target region:
 
 ```bash
-pnpm exec cdk bootstrap
-pnpm exec cdk deploy
+npm exec -- cdk bootstrap aws://YOUR_ACCOUNT_ID/ap-southeast-1 --profile koto-dev
+npm exec -- cdk deploy KotoLearningStack --profile koto-dev -c stage=dev -c region=ap-southeast-1 -c allowedOrigins=http://localhost:3000 --outputs-file cdk-outputs.json
 ```
 
-Copy the three stack outputs into `.env.local` using `.env.example` as the template, then rebuild the app. `amplify.yml` is ready for a Git-connected AWS Amplify Hosting app.
+Copy the user-pool, app-client, and API outputs into `.env.local` using `.env.example` as the template, then rebuild the app. `amplify.yml` is ready for a Git-connected AWS Amplify Hosting app. See the AWS guide below before deploying: development defaults to removable resources without point-in-time recovery, while `-c stage=prod` enables retention, deletion protection, and DynamoDB point-in-time recovery.
 
 ## Cost boundary
 
-This stack is deliberately small, but source code cannot guarantee a zero bill. Confirm each service is eligible in your account/region and set billing alerts before deployment. Under AWS's current Free account plan, a new account can experiment for up to six months or until its credits are used, whichever happens first. Keep a single development environment and remove resources you no longer need; the DynamoDB tables and Cognito pool use `RETAIN` so learner data is not silently deleted with the stack.
+This stack is deliberately small, but source code cannot guarantee a zero bill. Confirm each service is eligible in your account/region and set billing alerts before deployment. Keep a single development environment and remove resources you no longer need. Production resources use `RETAIN`, Cognito deletion protection, and DynamoDB point-in-time recovery so learner data is not silently removed with the stack; development resources default to `DESTROY` so cleanup and redeployment remain practical.
 
-Browser TTS and Web Speech recognition do not call Amazon Transcribe, Polly, or another paid speech API. Their availability and Japanese quality depend on the learner's browser and operating system.
+Browser TTS does not call Amazon Polly or another paid speech API. Its availability and Japanese quality depend on the learner's browser and operating system.
 
 ## Curriculum review
 
@@ -79,7 +85,7 @@ Tokyo pitch-accent examples should receive final approval from a qualified Japan
 
 ```text
 app/                 Next.js routes and application shell
-components/          lesson, trainer, dashboard, auth, TTS and voice UI
+components/          lesson, trainer, dashboard, auth and TTS UI
 lib/curriculum.ts    rewritten curriculum content and lesson checks
 lib/kana.ts          ordered kana groups, aliases and answer grading
 lib/progress.ts      guest state, proficiency rules and FSRS transitions

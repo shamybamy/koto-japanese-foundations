@@ -39,7 +39,7 @@ export function TrackView({ track }: { track: Track }) {
           );
         })}
       </section>
-      <aside className="sequence-note"><Lock size={17} /><div><strong>Sequence within each track</strong><p>Score at least 80% on a lesson check to unlock the next lesson. You can switch to another track whenever you like.</p></div></aside>
+      <aside className="sequence-note"><Lock size={17} /><div><strong>Sequence within each track</strong><p>Score 100% on a lesson check to unlock the next lesson. You can switch to another track whenever you like.</p></div></aside>
     </main>
   );
 }

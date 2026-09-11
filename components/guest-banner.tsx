@@ -11,7 +11,7 @@ export function GuestBanner() {
     <div className="guest-banner">
       <CloudOff size={16} aria-hidden />
       <span>You are exploring as a guest. Everything is open, but progress lasts only for this browser session.</span>
-      <Link href="/login">Save progress</Link>
+      <Link href="/login">Sign in to save future progress</Link>
     </div>
   );
 }
