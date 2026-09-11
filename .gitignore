@@ -37,6 +37,10 @@ yarn-error.log*
 /cdk.out/
 /cdk-outputs.json
 
+# local project notes
+/Koto Updated Project Plan.md
+/Koto-unpushed-markdown-files/
+
 # vercel
 .vercel
 .amplify-hosting/
